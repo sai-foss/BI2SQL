@@ -20,7 +20,6 @@ from sqlalchemy import create_engine, text
 from langchain_community.utilities import SQLDatabase
 
 
-# %%
 def check_csv_and_db_requirements():
     """
     Validate that either CSV folder exists or DuckDB file exists.

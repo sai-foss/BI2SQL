@@ -20,6 +20,20 @@ except ImportError as e:
 st.set_page_config(page_title="SQL Agent Chat", page_icon="💬")
 st.title("SQL Agent Chat")
 
+with st.sidebar:
+    st.header("Database Info")
+    if st.button("Show Database Schema"):
+        with st.spinner("Generating schema..."):
+            try:
+                from eralchemy import render_er
+                render_er("duckdb:///rag.duckdb", "schema.png")
+                if "messages" not in st.session_state:
+                    st.session_state["messages"] = [AIMessage(content="Hello! How can I help you with your database today?")]
+                st.session_state.messages.append(AIMessage(content="Here is the current database schema:\n\n[SCHEMA_IMAGE]"))
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to generate schema: {e}")
+
 # Initialize chat history in session state
 if "messages" not in st.session_state:
     st.session_state["messages"] = [
@@ -33,7 +47,13 @@ for message in st.session_state.messages:
             st.markdown(message.content)
     elif isinstance(message, AIMessage):
         with st.chat_message("assistant"):
-            st.markdown(message.content)
+            if "[SCHEMA_IMAGE]" in str(message.content):
+                st.markdown(str(message.content).replace("[SCHEMA_IMAGE]", ""))
+                if os.path.exists("schema.png"):
+                    # use_container_width=True ensures the image is scaled to the chat bubble width
+                    st.image("schema.png")
+            else:
+                st.markdown(message.content)
 
 # Accept user input
 # Example question: Tell me 10 most expensive procedures between 2013 and 2018 for people with normal pregnancy
@@ -43,6 +63,22 @@ if prompt := st.chat_input("What is your question?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
+        # Intercept specific schema-related requests to skip the LLM and render the diagram
+        if prompt.strip().lower() in ["schema", "show schema", "show database schema", "draw schema"]:
+            with st.spinner("Generating schema..."):
+                try:
+                    from eralchemy import render_er
+                    render_er("duckdb:///rag.duckdb", "schema.png")
+                    response = "Here is the current database schema:"
+                    st.markdown(response)
+                    st.image("schema.png")
+                    st.session_state.messages.append(AIMessage(content=f"{response}\n\n[SCHEMA_IMAGE]"))
+                except Exception as e:
+                    st.error(f"Failed to generate schema: {e}")
+            
+            # Halt execution so the agent doesn't also try to formulate a SQL query
+            st.stop()
+
         response_placeholder = st.empty()
         full_response = ""
         try:
@@ -81,3 +117,5 @@ if prompt := st.chat_input("What is your question?"):
             
         if full_response:
             st.session_state.messages.append(AIMessage(content=full_response))
+
+### TO DO: WITHIN TOOL CALL ITSELF WE GET THE SQL QUERY. WE MUSTNT HAVE TO READ FROM AI TEXT OUTPUT; 
