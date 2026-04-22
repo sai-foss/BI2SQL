@@ -11,7 +11,7 @@ load_dotenv()
 if not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter your Google AI API key: ")
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview")
 
 from pathlib import Path
 import re
@@ -131,29 +131,3 @@ agent = create_agent(
     tools=tools,
     system_prompt=system_prompt,
 )
-
-
-question = "tell me 10 most expensive procedures between 2013 and 18 for people with normal pregancy"
-
-
-from langchain_core.messages import AIMessage
-
-query = ""
-for step in agent.stream(
-    {"messages": [{"role": "user", "content": question}]},
-    stream_mode="values",
-):
-    msg = step["messages"][-1]
-
-    if isinstance(msg, AIMessage) and msg.tool_calls:
-        for tc in msg.tool_calls:
-            args = tc.get("args", {}) or {}
-            q = args.get("query") or args.get("sql") or args.get("input")
-            if q:
-                print(q)
-                query = q
-
-    msg.pretty_print()
-
-print(query)
-sys.exit(0)
