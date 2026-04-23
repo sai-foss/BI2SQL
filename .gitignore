@@ -3,3 +3,5 @@
 .env
 /__pycache__
 /venv
+rag_no_holds.duckdb
+/schemas
