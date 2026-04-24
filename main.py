@@ -7,11 +7,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
-# Gemini uses GOOGLE_API_KEY (or GEMINI_API_KEY fallback). If not found, prompt.
+# Gemini uses GOOGLE_API_KEY (or GEMINI_API_KEY fallback). If not found, prompt for api key (in the terminal)
 if not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter your Google AI API key: ")
 
-llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview")
+## was recommended a temperature of 0.0 for SQL agent tasks (by ChatGPT)
+llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0.0)
 
 from pathlib import Path
 import re
@@ -20,42 +21,42 @@ from sqlalchemy import create_engine, text
 from langchain_community.utilities import SQLDatabase
 
 
-def check_csv_and_db_requirements():
+def check_csv_and_db_requirements(): # true -> build db. False -> skip db. no csv dir = raise exception
     """
-    Validate that either CSV folder exists or DuckDB file exists.
-    Returns True only if CSV folder exists AND DuckDB file does NOT exist (proceed with population).
-    Returns False if DuckDB file already exists (skip population) or only CSV exists but DB exists.
-    Raises FileNotFoundError if neither exists.
-
-    CSV exists + DB doesn't exist → builds database from CSVs
-    CSV exists + DB exists → skips rebuild (reuses existing DB)
-    CSV doesn't exist + DB exists → skips build, uses existing DB
-    Neither exists → error with guidance
+    check if CSV folder exists and contains CSV files, and if the DuckDB database file already exists.
     """
     csv_dir = Path("./csv")
     db_file = Path("rag.duckdb")
 
-    csv_exists = csv_dir.exists() and csv_dir.is_dir()
-    db_exists = db_file.exists() and db_file.is_file()
 
-    if not csv_exists and not db_exists:
+    if not csv_dir.exists() and not db_file.exists():
         raise FileNotFoundError(
             "CSV folder './csv' not found and no existing 'rag.duckdb' database. "
             "Please add CSV files to ./csv directory."
         )
 
-    # Only populate if CSV exists AND DB doesn't exist yet
-    return csv_exists and not db_exists
+    elif not csv_dir.exists() and db_file.exists():
+        return False # you have the DB so skip DB build step
+
+    elif csv_dir.exists() and not db_file.exists():
+        return True  # no db but we have the csv so build the DB
+    
+    elif csv_dir.exists() and db_file.exists():
+        return False # this is the instance when both exist no need to build DB
+
+    
 
 
 # Check requirements and proceed only if validation passes
 should_populate_db = check_csv_and_db_requirements()
 
+
+# creating an instance of duckdb connection from the duckdb file
 engine = create_engine("duckdb:///rag.duckdb")
 
 
 # Only populate database if CSV folder exists AND database doesn't exist yet
-if should_populate_db:
+if should_populate_db == True:
     ###########################################################
     #### CSV FOLDER EXISTS & DB DOESN'T - BUILDING DATABASE ##########
     ###########################################################
@@ -94,7 +95,7 @@ if should_populate_db:
             )
             print(f"Loaded {csv_path.name} -> {table_name}")
 else:
-    print("Database already exists or CSV folder missing. Skipping database build.")
+    print("Database already exists. Skipping database build.")
 
 # Refresh LangChain wrapper after tables exist
 db = SQLDatabase(engine)
@@ -118,8 +119,28 @@ for tool in tools:
 from langchain.agents import create_agent
 
 system_prompt = """
-You are an agent designed to interact with a SQL database. Given an input question, create a syntactically correct {dialect} query to run. Then return the query to the user.
-Unless the user specifies the number of examples they wish to return always default to {top_k} results.
+You are an agent designed to interact with a SQL database containing medical data.
+Your primary function is strictly to answer questions related to healthcare, medical procedures, patients, and associated costs.
+
+If the user asks a question that is completely unrelated to the medical domain or the provided dataset, do NOT attempt to query the database or answer the question. Instead, politely reply: "I am specifically designed to answer questions related to the synthetic medical dataset. I cannot answer unrelated queries."
+
+Given an input question, create a syntactically correct {dialect} query to run,
+then look at the results of the query and return the answer. Unless the user
+specifies a specific number of examples they wish to obtain, always limit your
+query to at most {top_k} results.
+
+You MUST double check your query before executing it. If you get an error while
+executing a query, rewrite the query and try again.
+
+Queries might need to utilize DISTINCT keyword. If your query returns many of the same names you might have to use DISTINCT on the right column. Make sure to use Median for costs for prompts that ask for costs. Certain columns might have rows that have mismatches in case so normalize the cases in those cases. 
+
+DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the
+database.
+
+To start you should ALWAYS look at the tables in the database to see what you
+can query. Do NOT skip this step.
+
+Then you should query the schema of the most relevant tables.
 """.format(
     dialect=db.dialect,
     top_k=5,
