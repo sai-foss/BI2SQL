@@ -11,8 +11,10 @@ load_dotenv()
 if not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter your Google AI API key: ")
 
+
+
 ## was recommended a temperature of 0.0 for SQL agent tasks (by ChatGPT)
-llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0.0)
+llm = ChatGoogleGenerativeAI(model="gemma-4-31b-it")
 
 from pathlib import Path
 import re
@@ -21,13 +23,12 @@ from sqlalchemy import create_engine, text
 from langchain_community.utilities import SQLDatabase
 
 
-def check_csv_and_db_requirements(): # true -> build db. False -> skip db. no csv dir = raise exception
+def check_csv_and_db_requirements():  # true -> build db. False -> skip db. no csv dir = raise exception
     """
     check if CSV folder exists and contains CSV files, and if the DuckDB database file already exists.
     """
     csv_dir = Path("./csv")
     db_file = Path("rag.duckdb")
-
 
     if not csv_dir.exists() and not db_file.exists():
         raise FileNotFoundError(
@@ -36,15 +37,13 @@ def check_csv_and_db_requirements(): # true -> build db. False -> skip db. no cs
         )
 
     elif not csv_dir.exists() and db_file.exists():
-        return False # you have the DB so skip DB build step
+        return False  # you have the DB so skip DB build step
 
     elif csv_dir.exists() and not db_file.exists():
         return True  # no db but we have the csv so build the DB
-    
-    elif csv_dir.exists() and db_file.exists():
-        return False # this is the instance when both exist no need to build DB
 
-    
+    elif csv_dir.exists() and db_file.exists():
+        return False  # this is the instance when both exist no need to build DB
 
 
 # Check requirements and proceed only if validation passes
@@ -137,13 +136,12 @@ Queries might need to utilize DISTINCT keyword. If your query returns many of th
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the
 database.
 
-To start you should ALWAYS look at the tables in the database to see what you
-can query. Do NOT skip this step.
-
-Then you should query the schema of the most relevant tables.
+Here is the schema of the database you can query:
+{schema}
 """.format(
     dialect=db.dialect,
     top_k=5,
+    schema=db.get_table_info()
 )
 
 agent = create_agent(

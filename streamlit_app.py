@@ -51,21 +51,6 @@ class APICallCounter(BaseCallbackHandler):
 st.set_page_config(page_title="BI 2 SQL", page_icon="📊")
 st.title("BI 2 SQL Chat")
 
-# Inject custom CSS to make the sidebar expand (>>) icon more prominent
-st.markdown("""
-    <style>
-        /* Target the collapsed sidebar > icon */
-        [data-testid="collapsedControl"] svg {
-            width: 40px !important;
-            height: 40px !important;
-            color: #ff4b4b !important; /* Prominent primary color */
-        }
-        [data-testid="collapsedControl"]:hover svg {
-            transform: scale(1.1);
-            transition: transform 0.2s ease-in-out;
-        }
-    </style>
-""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.subheader("Database Info")
@@ -139,7 +124,7 @@ if st.session_state.get("collapse_sidebar"):
 
 # Accept user input
 # Example question: Tell me 10 most expensive procedures between 2013 and 2018 for people with normal pregnancy
-if prompt := st.chat_input("Tell me 10 most expensive procedures (Distinct) between 2013 and 2018 ?"):
+if prompt := st.chat_input("Example: Tell me 10 most expensive (unique) procedures between 2013 and 2018 ?"):
     st.session_state.messages.append(HumanMessage(content=prompt))
     with st.chat_message("user"):
         st.markdown(prompt)
